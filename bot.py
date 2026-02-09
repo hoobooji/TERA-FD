@@ -17,8 +17,8 @@ TARGET_CHANNELS = [
     "-1003676653101"
 ]
 
-POST_DELAY = 600      # 600 sec = 10 min
-MAX_POSTS = 0         # 0 = unlimited | 10 = sirf 10 posts
+POST_DELAY = 10      # 600 sec = 10 min
+MAX_POSTS = 4         # 0 = unlimited | 10 = sirf 10 posts
 # ============================================
 
 app = Client(
@@ -145,3 +145,4 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
+
