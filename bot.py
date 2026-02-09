@@ -1,10 +1,13 @@
 from pyrogram import Client
 import asyncio
+import os
 
 # ================== CONFIG ==================
-API_ID = 25649636
-API_HASH = "43af470d1c625e603733268b3c2f7b8f"
-BOT_TOKEN = "8463032760:AAHbdPDVDlLwbLVNZpKPG41fSlnbIRSS4Vc"
+API_ID = int(os.environ.get("API_ID", "25649636"))
+API_HASH = os.environ.get("API_HASH", "43af470d1c625e603733268b3c2f7b8f")
+# User Client ke liye SESSION_STRING chahiye (Bot nahi!)
+# session_maker.py chala kar banao, phir Heroku Config Var me add karo
+SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
 SOURCE_CHANNEL = "@terafdbo"  # एक सोर्स चैनल
 
@@ -18,11 +21,12 @@ POST_DELAY = 600      # 600 sec = 10 min | 1200 = 20 min
 MAX_POSTS = 10        # max 10 posts
 # ============================================
 
+# User Client (Bot nahi) - get_chat_history sirf User se kaam karta hai
 app = Client(
     "forward_bot",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN
+    session_string=SESSION_STRING
 )
 
 last_message_id = 0
@@ -73,7 +77,13 @@ async def post_job():
 
 
 async def main():
-    print("🤖 Starting bot...")
+    if not SESSION_STRING:
+        print("❌ ERROR: SESSION_STRING missing!")
+        print("   Bot get_chat_history use nahi kar sakta. User Client chahiye.")
+        print("   Run: python session_maker.py")
+        print("   Phir Heroku Config Vars me SESSION_STRING add karo.")
+        return
+    print("🤖 Starting bot (User Client)...")
     await app.start()
 
     while True:
