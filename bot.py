@@ -1,4 +1,4 @@
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.enums import ChatMemberStatus
 import asyncio
 import os
@@ -9,16 +9,16 @@ API_ID = int(os.environ.get("API_ID", "25649636"))
 API_HASH = os.environ.get("API_HASH", "43af470d1c625e603733268b3c2f7b8f")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8463032760:AAHbdPDVDlLwbLVNZpKPG41fSlnbIRSS4Vc")
 
-SOURCE_CHANNEL = -1003748804419  # सोर्स चैनल - बॉट को यहाँ Admin बनाओ
+SOURCE_CHANNEL = -1003748804419   # SOURCE channel ID (bot must be admin)
 
 TARGET_CHANNELS = [
-    "-1003553400713",
-    "-1003245056110",
-    "-1003676653101"
+    -1003553400713,
+    -1003245056110,
+    -1003676653101
 ]
 
-POST_DELAY = 10      # 600 sec = 10 min
-MAX_POSTS = 4         # 0 = unlimited | 10 = sirf 10 posts
+POST_DELAY = 10      # seconds (Heroku test ke liye)
+MAX_POSTS = 4        # 0 = unlimited
 # ============================================
 
 app = Client(
@@ -28,128 +28,104 @@ app = Client(
     bot_token=BOT_TOKEN
 )
 
-# Queue: naye post yahan add honge, 10 min gap par process
 message_queue = asyncio.Queue()
 forward_count = 0
 stop_event = asyncio.Event()
 
-# Heroku SIGTERM - pehle se handler set (R12 fix)
+# ================== HEROKU SIGTERM ==================
 def handle_sigterm(signum, frame):
     print("🛑 SIGTERM received, shutting down...")
     stop_event.set()
-if hasattr(signal, "SIGTERM"):
-    signal.signal(signal.SIGTERM, handle_sigterm)
 
+signal.signal(signal.SIGTERM, handle_sigterm)
 
+# ================== QUEUE WORKER ==================
 async def queue_worker():
-    """Queue se messages lo, 10 min gap par alag-alag channel me forward karo"""
     global forward_count
     while not stop_event.is_set():
         try:
-            try:
-                msg = await asyncio.wait_for(message_queue.get(), timeout=5.0)
-            except asyncio.TimeoutError:
+            msg = await asyncio.wait_for(message_queue.get(), timeout=5)
+        except asyncio.TimeoutError:
+            continue
+
+        if MAX_POSTS and forward_count >= MAX_POSTS:
+            print("✅ Max posts reached.")
+            continue
+
+        target = TARGET_CHANNELS[forward_count % len(TARGET_CHANNELS)]
+
+        try:
+            if msg.photo:
+                await app.send_photo(
+                    target,
+                    msg.photo.file_id,
+                    caption=msg.caption or ""
+                )
+            elif msg.video:
+                await app.send_video(
+                    target,
+                    msg.video.file_id,
+                    caption=msg.caption or ""
+                )
+            else:
+                print("⏭ Skipped non-media")
                 continue
-            if msg is None:
-                break
 
-            if MAX_POSTS and forward_count >= MAX_POSTS:
-                print("✅ Max posts reached. No more forwarding.")
-                continue
+            forward_count += 1
+            print(f"➡️ Forwarded {forward_count} to {target}")
 
-            channel_index = forward_count % len(TARGET_CHANNELS)
-            target = TARGET_CHANNELS[channel_index]
+        except Exception as e:
+            print(f"❌ Forward error: {e}")
 
-            try:
-                if msg.photo:
-                    await app.send_photo(
-                        target,
-                        msg.photo.file_id,
-                        caption=msg.caption or ""
-                    )
-                elif msg.video:
-                    await app.send_video(
-                        target,
-                        msg.video.file_id,
-                        caption=msg.caption or ""
-                    )
-                else:
-                    print("⏭ Skipped non-media")
-                    continue
+        await asyncio.sleep(POST_DELAY)
 
-                forward_count += 1
-                print(f"➡️ Forwarded {forward_count} to {target}")
-            except Exception as e:
-                print(f"❌ Forward error: {e}")
-
-            await asyncio.sleep(POST_DELAY)
-        except asyncio.CancelledError:
-            break
-
-
+# ================== SOURCE LISTENER ==================
 @app.on_message(filters.chat(SOURCE_CHANNEL) & (filters.photo | filters.video))
 async def on_new_post(client, message):
-    """जब source channel me naya photo/video post aayega"""
-    media_type = "photo" if message.photo else "video"
-    print(f"📥 POST AAYA! Source channel me naya {media_type} post received (msg_id: {message.id})")
+    print(f"📥 New post received (msg_id: {message.id})")
     await message_queue.put(message)
-    print(f"   Queue me add ho gaya. Abhi queue size: {message_queue.qsize()}")
+    print(f"📦 Queue size: {message_queue.qsize()}")
 
-
+# ================== ADMIN CHECK ==================
 async def check_bot_admin():
     try:
         bot = await app.get_me()
-        me = await app.get_chat_member(SOURCE_CHANNEL, bot.id)
+        member = await app.get_chat_member(SOURCE_CHANNEL, bot.id)
 
-        if me.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
-            print(f"✅ Bot {SOURCE_CHANNEL} me ADMIN hai")
+        if member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+            print("✅ Bot is ADMIN in source channel")
             return True
         else:
-            print(f"❌ Bot admin nahi hai")
-            print(f"   Status: {me.status}")
+            print(f"❌ Bot status: {member.status}")
             return False
 
     except Exception as e:
         print(f"❌ Admin check failed: {e}")
-        print("➡️ Confirm karo:")
-        print("   1. Bot source channel me ADMIN hai")
-        print("   2. Channel username / ID sahi hai")
         return False
 
-
-
+# ================== MAIN ==================
 async def main():
-    print("🤖 Starting bot - sirf UPCOMING posts forward honge...")
+    print("🤖 Starting bot (only UPCOMING posts)...")
 
-    # Pehle admin check - agar nahi hai to exit
+    # 🔥 MOST IMPORTANT FIX
+    await app.start()
+
     is_admin = await check_bot_admin()
     if not is_admin:
-        print("🛑 Bot start nahi hoga. Pehle admin banao.")
+        print("🛑 Bot start aborted. Make bot ADMIN first.")
+        await app.stop()
         return
 
     worker_task = asyncio.create_task(queue_worker())
-    print("✅ Bot ready. Source channel me post aate hi log me 'POST AAYA!' dikhega.")
-    from pyrogram import idle
-    idle_task = asyncio.create_task(idle())
+    print("✅ Bot READY. Waiting for new posts...")
+
     await stop_event.wait()
-    print("🛑 Stopping...")
-    idle_task.cancel()
+
+    print("🛑 Shutting down...")
     worker_task.cancel()
-    try:
-        await idle_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await worker_task
-    except asyncio.CancelledError:
-        pass
     await app.stop()
-    print("✅ Stopped cleanly.")
+    print("✅ Bot stopped cleanly.")
 
-
+# ================== RUN ==================
 if __name__ == "__main__":
     app.run(main())
-
-
-
-
