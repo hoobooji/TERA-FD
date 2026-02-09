@@ -1,4 +1,5 @@
 from pyrogram import Client, filters
+from pyrogram.enums import ChatMemberStatus
 import asyncio
 import os
 import signal
@@ -16,8 +17,8 @@ TARGET_CHANNELS = [
     "-1003676653101"
 ]
 
-POST_DELAY = 10    # 600 sec = 10 min
-MAX_POSTS = 4         # 0 = unlimited | 10 = sirf 10 posts
+POST_DELAY = 600      # 600 sec = 10 min
+MAX_POSTS = 0         # 0 = unlimited | 10 = sirf 10 posts
 # ============================================
 
 app = Client(
@@ -31,6 +32,13 @@ app = Client(
 message_queue = asyncio.Queue()
 forward_count = 0
 stop_event = asyncio.Event()
+
+# Heroku SIGTERM - pehle se handler set (R12 fix)
+def handle_sigterm(signum, frame):
+    print("🛑 SIGTERM received, shutting down...")
+    stop_event.set()
+if hasattr(signal, "SIGTERM"):
+    signal.signal(signal.SIGTERM, handle_sigterm)
 
 
 async def queue_worker():
@@ -79,28 +87,44 @@ async def queue_worker():
             break
 
 
-# Channel posts - 2 handlers: channel + non-channel (group bhi ho sakta hai)
-# Zaroori: Bot ko SOURCE_CHANNEL me ADMIN banao, warna post receive nahi hoga!
 @app.on_message(filters.chat(SOURCE_CHANNEL) & (filters.photo | filters.video))
 async def on_new_post(client, message):
     """जब source channel me naya photo/video post aayega"""
+    media_type = "photo" if message.photo else "video"
+    print(f"📥 POST AAYA! Source channel me naya {media_type} post received (msg_id: {message.id})")
     await message_queue.put(message)
-    print(f"📥 New post queued (queue size: {message_queue.qsize()})")
+    print(f"   Queue me add ho gaya. Abhi queue size: {message_queue.qsize()}")
 
 
-def handle_sigterm(signum, frame):
-    """Heroku SIGTERM - 30 sec ke andar exit karna zaroori"""
-    print("🛑 SIGTERM received, shutting down...")
-    stop_event.set()
+async def check_bot_admin():
+    """Bot source channel me admin hai ya nahi - pehle yahi check"""
+    try:
+        me = await app.get_chat_member(SOURCE_CHANNEL, "me")
+        if me.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+            print(f"✅ Bot {SOURCE_CHANNEL} me ADMIN hai - post receive kar sakta hai")
+            return True
+        else:
+            print(f"❌ Bot {SOURCE_CHANNEL} me ADMIN NAHI hai!")
+            print(f"   Bot status: {me.status}")
+            print(f"   Channel me jaake Bot ko Administrator add karo.")
+            return False
+    except Exception as e:
+        print(f"❌ Source channel check FAILED: {e}")
+        print(f"   Bot ko {SOURCE_CHANNEL} me ADMIN add karo, ya channel ID sahi hai check karo.")
+        return False
 
 
 async def main():
-    if hasattr(signal, "SIGTERM"):
-        signal.signal(signal.SIGTERM, handle_sigterm)
     print("🤖 Starting bot - sirf UPCOMING posts forward honge...")
+
+    # Pehle admin check - agar nahi hai to exit
+    is_admin = await check_bot_admin()
+    if not is_admin:
+        print("🛑 Bot start nahi hoga. Pehle admin banao.")
+        return
+
     worker_task = asyncio.create_task(queue_worker())
-    print("✅ Bot ready. Source channel me naya post aane par forward hoga.")
-    print("⚠️  Agar kaam nahi kar raha: Bot ko @terafdbo me ADMIN add karo!")
+    print("✅ Bot ready. Source channel me post aate hi log me 'POST AAYA!' dikhega.")
     from pyrogram import idle
     idle_task = asyncio.create_task(idle())
     await stop_event.wait()
@@ -121,4 +145,3 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-
