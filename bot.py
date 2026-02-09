@@ -7,7 +7,7 @@ API_ID = 25649636
 API_HASH = "43af470d1c625e603733268b3c2f7b8f"
 BOT_TOKEN = "8463032760:AAHbdPDVDlLwbLVNZpKPG41fSlnbIRSS4Vc"
 
-SOURCE_CHANNEL = -1003748804419  # source channel ID
+SOURCE_CHANNEL = "@terafdbo"  # source channel ID
 
 TARGET_CHANNELS = [
     "-1003553400713",
@@ -87,3 +87,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
