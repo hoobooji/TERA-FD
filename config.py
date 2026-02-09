@@ -10,4 +10,4 @@ TARGET_CHANNELS = [
     "-1003676653101"
 ]
 
-POST_DELAY = 10   # 10 min (1200 = 20 min)
+POST_DELAY = 600   # 600 sec = 10 min | 1200 = 20 min
