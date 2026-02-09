@@ -34,13 +34,13 @@ async def post_job():
     global last_message_id, forward_count
 
     if forward_count >= MAX_POSTS:
-        print("✅ Limit reached. Bot stopping.")
+        print("✅ 10 posts forwarded. Bot stopping.")
         return False
 
     async for msg in app.get_chat_history(
         SOURCE_CHANNEL,
         offset_id=last_message_id,
-        reverse=True
+        limit=1
     ):
         last_message_id = msg.id
         target = random.choice(TARGET_CHANNELS)
@@ -61,16 +61,18 @@ async def post_job():
                 )
 
             else:
-                continue
+                print("⏭ Skipped non-media message")
+                return True
 
             forward_count += 1
             print(f"➡️ Forwarded {forward_count}/{MAX_POSTS} to {target}")
             return True
 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Error while sending: {e}")
             return True
 
+    print("⚠️ No more messages in source channel")
     return False
 
 
@@ -82,7 +84,11 @@ async def main():
             break
         await asyncio.sleep(POST_DELAY)
 
-    print("🛑 Bot finished its job.")
+    print("🛑 Bot finished work.")
 
 
 app.run(main())
+
+
+app.run(main())
+
