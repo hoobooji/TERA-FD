@@ -9,7 +9,7 @@ API_ID = int(os.environ.get("API_ID", "25649636"))
 API_HASH = os.environ.get("API_HASH", "43af470d1c625e603733268b3c2f7b8f")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8463032760:AAHbdPDVDlLwbLVNZpKPG41fSlnbIRSS4Vc")
 
-SOURCE_CHANNEL = "@terafdbo"  # सोर्स चैनल - बॉट को यहाँ Admin बनाओ
+SOURCE_CHANNEL = "-1003748804419"  # सोर्स चैनल - बॉट को यहाँ Admin बनाओ
 
 TARGET_CHANNELS = [
     "-1003553400713",
@@ -145,4 +145,5 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
+
 
