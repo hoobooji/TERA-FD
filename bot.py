@@ -74,28 +74,23 @@ async def queue_worker():
             break
 
 
+# Channel posts - 2 handlers: channel + non-channel (group bhi ho sakta hai)
+# Zaroori: Bot ko SOURCE_CHANNEL me ADMIN banao, warna post receive nahi hoga!
 @app.on_message(filters.chat(SOURCE_CHANNEL) & (filters.photo | filters.video))
 async def on_new_post(client, message):
-    """सिर्फ नए/upcoming post - jab source channel me naya post aayega"""
+    """जब source channel me naya photo/video post aayega"""
     await message_queue.put(message)
-    print(f"📥 New post queued (total in queue: {message_queue.qsize()})")
+    print(f"📥 New post queued (queue size: {message_queue.qsize()})")
 
 
 async def main():
     print("🤖 Starting bot - sirf UPCOMING posts forward honge...")
-    await app.start()
-
-    # Queue worker start
-    queue_worker_running = True
-    worker_task = asyncio.create_task(queue_worker())
-
+    asyncio.create_task(queue_worker())
     print("✅ Bot ready. Source channel me naya post aane par forward hoga.")
-    await worker_task
-
-    await app.stop()
-    print("🛑 Bot stopped.")
+    print("⚠️  Agar kaam nahi kar raha: Bot ko @terafdbo me ADMIN add karo!")
+    from pyrogram import idle
+    await idle()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    app.run(main())
