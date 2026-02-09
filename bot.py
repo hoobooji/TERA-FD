@@ -34,7 +34,7 @@ async def post_job():
     global last_message_id, forward_count
 
     if forward_count >= MAX_POSTS:
-        print("✅ 10 posts forwarded. Bot stopping.")
+        print("✅ 10 posts forwarded. Stopping.")
         return False
 
     async for msg in app.get_chat_history(
@@ -45,50 +45,45 @@ async def post_job():
         last_message_id = msg.id
         target = random.choice(TARGET_CHANNELS)
 
-        try:
-            if msg.photo:
-                await app.send_photo(
-                    target,
-                    photo=msg.photo.file_id,
-                    caption=msg.caption or ""
-                )
+        if msg.photo:
+            await app.send_photo(
+                target,
+                msg.photo.file_id,
+                caption=msg.caption or ""
+            )
 
-            elif msg.video:
-                await app.send_video(
-                    target,
-                    video=msg.video.file_id,
-                    caption=msg.caption or ""
-                )
+        elif msg.video:
+            await app.send_video(
+                target,
+                msg.video.file_id,
+                caption=msg.caption or ""
+            )
 
-            else:
-                print("⏭ Skipped non-media message")
-                return True
-
-            forward_count += 1
-            print(f"➡️ Forwarded {forward_count}/{MAX_POSTS} to {target}")
+        else:
+            print("⏭ Skipped non-media message")
             return True
 
-        except Exception as e:
-            print(f"❌ Error while sending: {e}")
-            return True
+        forward_count += 1
+        print(f"➡️ Forwarded {forward_count}/{MAX_POSTS} to {target}")
+        return True
 
-    print("⚠️ No more messages in source channel")
+    print("⚠️ No more messages found")
     return False
 
 
 async def main():
-    print("🤖 Bot started...")
+    print("🤖 Starting bot...")
+    await app.start()   # 🔥 IMPORTANT
+
     while True:
         status = await post_job()
         if not status:
             break
         await asyncio.sleep(POST_DELAY)
 
-    print("🛑 Bot finished work.")
+    await app.stop()
+    print("🛑 Bot stopped cleanly.")
 
 
-app.run(main())
-
-
-app.run(main())
-
+if __name__ == "__main__":
+    asyncio.run(main())
