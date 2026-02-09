@@ -1,13 +1,12 @@
 from pyrogram import Client
 import asyncio
-import random
 
 # ================== CONFIG ==================
 API_ID = 25649636
 API_HASH = "43af470d1c625e603733268b3c2f7b8f"
 BOT_TOKEN = "8463032760:AAHbdPDVDlLwbLVNZpKPG41fSlnbIRSS4Vc"
 
-SOURCE_CHANNEL = "@terafdbo"  # source channel ID
+SOURCE_CHANNEL = "@terafdbo"  # एक सोर्स चैनल
 
 TARGET_CHANNELS = [
     "-1003553400713",
@@ -15,8 +14,8 @@ TARGET_CHANNELS = [
     "-1003676653101"
 ]
 
-POST_DELAY = 600      # 600 = 10 min | 1200 = 20 min
-MAX_POSTS = 10        # 🔥 only 10 posts
+POST_DELAY = 600      # 600 sec = 10 min | 1200 = 20 min
+MAX_POSTS = 10        # max 10 posts
 # ============================================
 
 app = Client(
@@ -31,11 +30,12 @@ forward_count = 0
 
 
 async def post_job():
+    """एक सोर्स से पोस्ट लेकर अलग-अलग चैनल में भेजता है (round-robin)"""
     global last_message_id, forward_count
 
     if forward_count >= MAX_POSTS:
         print("✅ 10 posts forwarded. Stopping.")
-        return False
+        return "stop"
 
     async for msg in app.get_chat_history(
         SOURCE_CHANNEL,
@@ -43,7 +43,10 @@ async def post_job():
         limit=1
     ):
         last_message_id = msg.id
-        target = random.choice(TARGET_CHANNELS)
+
+        # हर पोस्ट अलग चैनल में (round-robin: 1→ch1, 2→ch2, 3→ch3, 4→ch1...)
+        channel_index = forward_count % len(TARGET_CHANNELS)
+        target = TARGET_CHANNELS[channel_index]
 
         if msg.photo:
             await app.send_photo(
@@ -51,35 +54,35 @@ async def post_job():
                 msg.photo.file_id,
                 caption=msg.caption or ""
             )
-
         elif msg.video:
             await app.send_video(
                 target,
                 msg.video.file_id,
                 caption=msg.caption or ""
             )
-
         else:
             print("⏭ Skipped non-media message")
-            return True
+            return "skipped"
 
         forward_count += 1
         print(f"➡️ Forwarded {forward_count}/{MAX_POSTS} to {target}")
-        return True
+        return "forwarded"
 
     print("⚠️ No more messages found")
-    return False
+    return "stop"
 
 
 async def main():
     print("🤖 Starting bot...")
-    await app.start()   # 🔥 IMPORTANT
+    await app.start()
 
     while True:
         status = await post_job()
-        if not status:
+        if status == "stop":
             break
-        await asyncio.sleep(POST_DELAY)
+        # सिर्फ successful forward के बाद 10 min wait
+        if status == "forwarded":
+            await asyncio.sleep(POST_DELAY)
 
     await app.stop()
     print("🛑 Bot stopped cleanly.")
@@ -87,4 +90,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
