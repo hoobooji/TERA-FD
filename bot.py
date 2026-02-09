@@ -1,13 +1,14 @@
 from pyrogram import Client, filters
 import asyncio
 import os
+import signal
 
 # ================== CONFIG ==================
 API_ID = int(os.environ.get("API_ID", "25649636"))
 API_HASH = os.environ.get("API_HASH", "43af470d1c625e603733268b3c2f7b8f")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8463032760:AAHbdPDVDlLwbLVNZpKPG41fSlnbIRSS4Vc")
 
-SOURCE_CHANNEL = "-1003748804419"  # सोर्स चैनल - बॉट को यहाँ Admin बनाओ
+SOURCE_CHANNEL = "@terafdbo"  # सोर्स चैनल - बॉट को यहाँ Admin बनाओ
 
 TARGET_CHANNELS = [
     "-1003553400713",
@@ -15,8 +16,8 @@ TARGET_CHANNELS = [
     "-1003676653101"
 ]
 
-POST_DELAY = 10      # 600 sec = 10 min
-MAX_POSTS = 4         # 0 = unlimited | 10 = sirf 10 posts
+POST_DELAY = 600      # 600 sec = 10 min
+MAX_POSTS = 0         # 0 = unlimited | 10 = sirf 10 posts
 # ============================================
 
 app = Client(
@@ -29,14 +30,18 @@ app = Client(
 # Queue: naye post yahan add honge, 10 min gap par process
 message_queue = asyncio.Queue()
 forward_count = 0
+stop_event = asyncio.Event()
 
 
 async def queue_worker():
     """Queue se messages lo, 10 min gap par alag-alag channel me forward karo"""
     global forward_count
-    while True:
+    while not stop_event.is_set():
         try:
-            msg = await message_queue.get()
+            try:
+                msg = await asyncio.wait_for(message_queue.get(), timeout=5.0)
+            except asyncio.TimeoutError:
+                continue
             if msg is None:
                 break
 
@@ -83,15 +88,36 @@ async def on_new_post(client, message):
     print(f"📥 New post queued (queue size: {message_queue.qsize()})")
 
 
+def handle_sigterm(signum, frame):
+    """Heroku SIGTERM - 30 sec ke andar exit karna zaroori"""
+    print("🛑 SIGTERM received, shutting down...")
+    stop_event.set()
+
+
 async def main():
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, handle_sigterm)
     print("🤖 Starting bot - sirf UPCOMING posts forward honge...")
-    asyncio.create_task(queue_worker())
+    worker_task = asyncio.create_task(queue_worker())
     print("✅ Bot ready. Source channel me naya post aane par forward hoga.")
     print("⚠️  Agar kaam nahi kar raha: Bot ko @terafdbo me ADMIN add karo!")
     from pyrogram import idle
-    await idle()
+    idle_task = asyncio.create_task(idle())
+    await stop_event.wait()
+    print("🛑 Stopping...")
+    idle_task.cancel()
+    worker_task.cancel()
+    try:
+        await idle_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
+    await app.stop()
+    print("✅ Stopped cleanly.")
 
 
 if __name__ == "__main__":
     app.run(main())
-
