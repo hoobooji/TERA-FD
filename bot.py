@@ -97,21 +97,25 @@ async def on_new_post(client, message):
 
 
 async def check_bot_admin():
-    """Bot source channel me admin hai ya nahi - pehle yahi check"""
     try:
-        me = await app.get_chat_member(SOURCE_CHANNEL, "me")
+        bot = await app.get_me()
+        me = await app.get_chat_member(SOURCE_CHANNEL, bot.id)
+
         if me.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
-            print(f"✅ Bot {SOURCE_CHANNEL} me ADMIN hai - post receive kar sakta hai")
+            print(f"✅ Bot {SOURCE_CHANNEL} me ADMIN hai")
             return True
         else:
-            print(f"❌ Bot {SOURCE_CHANNEL} me ADMIN NAHI hai!")
-            print(f"   Bot status: {me.status}")
-            print(f"   Channel me jaake Bot ko Administrator add karo.")
+            print(f"❌ Bot admin nahi hai")
+            print(f"   Status: {me.status}")
             return False
+
     except Exception as e:
-        print(f"❌ Source channel check FAILED: {e}")
-        print(f"   Bot ko {SOURCE_CHANNEL} me ADMIN add karo, ya channel ID sahi hai check karo.")
+        print(f"❌ Admin check failed: {e}")
+        print("➡️ Confirm karo:")
+        print("   1. Bot source channel me ADMIN hai")
+        print("   2. Channel username / ID sahi hai")
         return False
+
 
 
 async def main():
@@ -145,5 +149,6 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
+
 
 
